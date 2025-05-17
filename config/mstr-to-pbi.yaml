@@ -1,21 +1,25 @@
-# Configuration for mapping MicroStrategy to Power BI TMDL/Report objects
+# Configuration for mapping MicroStrategy elements to Power BI objects
 
 # --- Output Settings ---
 Output:
-  intermediate_dir: extracted  # Directory for storing intermediate JSON files
-  validate_intermediate: false  # Whether to validate intermediate files
+  intermediate_dir: extracted
+  validate_intermediate: false
 
 # --- API Settings ---
 api_settings:
-  # Base URL for the FastAPI service
-  base_url: "http://localhost:8000"
-  # Timeout in seconds for API requests
+  base_url: "http://localhost:8000/api"
+  version: "v2"
   timeout_seconds: 30
-  # Endpoints
   endpoints:
-    mstr_to_dax: "/convert/mstr-to-dax"
-    mstr_to_m: "/convert/mstr-to-m-code"
-    mstr_metric_to_dax: "/convert/mstr-metric-to-dax"
+    project: "/projects/{projectId}"
+    schema: "/projects/{projectId}/schema"
+    reports: "/projects/{projectId}/reports"
+    documents: "/projects/{projectId}/documents"
+    dossiers: "/projects/{projectId}/dossiers"
+    metrics: "/projects/{projectId}/metrics"
+    filters: "/projects/{projectId}/filters"
+    prompts: "/projects/{projectId}/prompts"
+    cubes: "/projects/{projectId}/cubes"
 
 # --- Template Mappings ---
 Templates:
@@ -53,6 +57,12 @@ Templates:
       config: PowerBiExpressions
       dataclass: PowerBiExpressions
 
+    relationships:
+      template: relationships.tmdl
+      output: Model/relationships.tmdl
+      config: PowerBiRelationships
+      dataclass: PowerBiRelationships
+
     table:
       template: Table.tmdl
       output: Model/tables/{{source_name}}.tmdl
@@ -60,14 +70,6 @@ Templates:
       dataclass: PowerBiTable
       multiple: true
       name_from: source_name
-
-    relationship:
-      template: relationship.tmdl
-      output: Model/relationships.tmdl
-      config: PowerBiRelationship
-      dataclass: PowerBiRelationship
-      multiple: true
-      name_from: id
 
     culture:
       template: culture.tmdl
@@ -116,104 +118,78 @@ Templates:
       multiple: true
       name_from: name
 
-# --- MicroStrategy Mappings ---
+# --- Core Mappings ---
 Mappings:
-  # Schema Object Mappings
+  # --- Project Configuration ---
+  Project:
+    source_xpath: "//project"
+    attributes:
+      name:
+        source_attribute: "name"
+      description:
+        source_attribute: "description"
+        optional: true
+      version:
+        source_xpath: "version/@number"
+
+  # --- Schema Objects ---
   SchemaObjects:
+    # Attribute Forms
     AttributeForms:
-      ID: "Key"
-      DESC: "Name"
-      LONGDESC: "Description"
+      source_xpath: "//attribute/forms/form"
+      attributes:
+        name:
+          source_attribute: "name"
+        category:
+          source_attribute: "category"
+          mapping:
+            ID: "Key"
+            DESC: "Name"
+            LONGDESC: "Description"
+
+    # Data Types
     DataTypes:
-      Integer: "Int64"
-      Double: "Double"
-      String: "String"
-      Date: "DateTime"
-      Boolean: "Boolean"
+      mapping:
+        Integer: "Int64"
+        Double: "Double"
+        String: "String"
+        Date: "DateTime"
+        Boolean: "Boolean"
 
-  # Object Type Mappings
+  # --- Object Types ---
   ObjectTypes:
+    # Reports
     Report:
-      source: "MicroStrategyReport"
+      source_xpath: "//report[@type='grid' or @type='graph']"
       target: "PowerBIPage"
-      notes: "Grid/graph reports map to Power BI pages"
-    Document:
-      source: "MicroStrategyDocument"
-      target: ["PowerBIReport", "PowerBIPaginatedReport"]
-      notes: "Complex layouts may need Paginated Reports"
-      conditions:
-        use_paginated:
-          - "has_pixel_perfect_requirements"
-          - "has_multiple_data_regions"
-    Dossier:
-      source: "MicroStrategyDossier"
-      target: "PowerBIReport"
-      notes: "Modern dashboards map to Power BI reports"
-    Metric:
-      source: "MicroStrategyMetric"
-      target: "PowerBIMeasure"
-      notes: "Requires DAX conversion"
-    Attribute:
-      source: "MicroStrategyAttribute"
-      target: "PowerBIColumn"
-      table_type: "dimension"
-    Fact:
-      source: "MicroStrategyFact"
-      target: "PowerBIColumn"
-      table_type: "fact"
-    Prompt:
-      source: "MicroStrategyPrompt"
-      target:
-        element: "PowerBISlicer"
-        value: "PowerBIParameter"
-        object: "PowerBIParameter"
-    Cube:
-      source: "MicroStrategyIntelligentCube"
-      target: "PowerBIDataset_ImportMode"
+      attributes:
+        name:
+          source_attribute: "name"
+        type:
+          source_attribute: "type"
+          mapping:
+            grid: "Table"
+            graph: "Visual"
 
-  # Visual Mappings
-  Visuals:
-    Grid:
-      target: ["MatrixVisual", "TableVisual"]
-      rules:
-        - condition: "has_row_attributes && has_column_attributes"
-          target: "MatrixVisual"
-        - condition: "default"
-          target: "TableVisual"
-    Charts:
-      VerticalBar:
-        Clustered:
-          target: "ClusteredBarChart"
-        Stacked:
-          target: "StackedBarChart"
-        Percent:
-          target: "100StackedBarChart"
-      HorizontalBar:
-        Clustered:
-          target: "ClusteredBarChart"
-          properties:
-            orientation: "horizontal"
-      Line:
-        target: "LineChart"
-      Area:
-        target: "AreaChart"
-      Pie:
-        target: "PieChart"
-      Scatter:
-        target: "ScatterChart"
-      Bubble:
-        target: "BubbleChart"
-      Combo:
-        target: "ComboChart"
-    Widgets:
-      Selector:
-        target: "Slicer"
-      TextBox:
-        target: "TextBox"
-      Image:
-        target: "Image"
-      Shape:
-        target: "Shape"
+    # Documents
+    Document:
+      source_xpath: "//document"
+      target:
+        type: "PowerBIReport"
+        conditions:
+          use_paginated:
+            - "has_pixel_perfect_requirements"
+            - "has_multiple_data_regions"
+
+    # Metrics
+    Metric:
+      source_xpath: "//metric"
+      target: "PowerBIMeasure"
+      attributes:
+        name:
+          source_attribute: "name"
+        expression:
+          source_xpath: "expression/text()"
 
   # Function Mappings
   Functions:
@@ -362,51 +338,6 @@ Mappings:
       target: "PowerBIDataset_ImportMode"
       notes: "Maps to imported tables in Power BI"
       conversion_priority: 1
-
-  # Visual Type Mappings
-  VisualTypes:
-    # Grid Types
-    - source: "Grid"
-      target: ["MatrixVisual", "TableVisual"]
-      rules:
-        - condition: "has_row_attributes && has_column_attributes"
-          target: "MatrixVisual"
-        - condition: "default"
-          target: "TableVisual"
-
-    # Graph Types
-    - source: "Graph:VerticalBar:Clustered"
-      target: "ClusteredBarChart"
-    - source: "Graph:VerticalBar:Stacked"
-      target: "StackedBarChart"
-    - source: "Graph:VerticalBar:Percent"
-      target: "100StackedBarChart"
-    - source: "Graph:HorizontalBar:Clustered"
-      target: "ClusteredBarChart"
-      properties:
-        orientation: "horizontal"
-    - source: "Graph:Line"
-      target: "LineChart"
-    - source: "Graph:Area"
-      target: "AreaChart"
-    - source: "Graph:Pie"
-      target: "PieChart"
-    - source: "Graph:Scatter"
-      target: "ScatterChart"
-    - source: "Graph:Bubble"
-      target: "BubbleChart"
-    - source: "Graph:Combo"
-      target: "ComboChart"
-
-    # Widget Types (Documents/Dossiers)
-    - source: "Widget:Selector"
-      target: "Slicer"
-    - source: "Widget:TextBox"
-      target: "TextBox"
-    - source: "Widget:Image"
-      target: "Image"
-    - source: "Widget:Shape"
-      target: "Shape"
 
   # Function Mappings for Formula Conversion
   FunctionMappings:

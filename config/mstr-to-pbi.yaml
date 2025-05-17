@@ -1,3 +1,110 @@
+# Configuration for mapping Microstrategy XML elements to Power BI TMDL/Report objects
+
+# --- Output Settings ---
+Output:
+  intermediate_dir: extracted  # Directory for storing intermediate JSON files
+  validate_intermediate: false     # Whether to validate intermediate files
+
+# --- API Settings ---
+api_settings:
+  # Base URL for the FastAPI service
+  base_url: "http://localhost:8000"
+  # Timeout in seconds for API requests
+  timeout_seconds: 30
+  # Endpoints
+  endpoints:
+    tableau_to_dax: "/convert/***-to-dax"
+    tableau_to_m: "/convert/***  -to-m-code"
+    # Add more endpoints as needed
+
+# --- Template Mappings ---
+Templates:
+  base_dir: templates
+  mappings:
+    # --- Project Files ---
+    version:
+      template: Version.txt
+      output: Version.txt
+      config: PowerBiVersion
+      dataclass: PowerBiVersion
+
+    pbixproj:
+      template: pbixproj.json
+      output: .pbixproj.json
+      config: PowerBiProject
+      dataclass: PowerBiProject
+    # --- Model Files ---
+    model:
+      template: model.tmdl
+      output: Model/model.tmdl
+      config: PowerBiModel
+      dataclass: PowerBiModel
+    database:
+      template: database.tmdl
+      output: Model/database.tmdl
+      config: PowerBiDatabase
+      dataclass: PowerBiDatabase
+    expressions:
+      template: expressions.tmdl
+      output: Model/expressions.tmdl
+      config: PowerBiExpressions
+      dataclass: PowerBiExpressions
+    table:
+      template: Table.tmdl
+      output: Model/tables/{{source_name}}.tmdl
+      config: PowerBiTable
+      dataclass: PowerBiTable
+      multiple: true
+      name_from: source_name
+    relationship:
+      template: relationship.tmdl
+      output: Model/relationships.tmdl
+      config: PowerBiRelationship
+      dataclass: PowerBiRelationship
+      multiple: true
+      name_from: id
+    culture:
+      template: culture.tmdl
+      output: Model/cultures/{{culture}}.tmdl
+      config: PowerBiCulture
+      dataclass: CultureInfo
+      multiple: true
+      name_from: culture
+
+    # --- Report Files ---
+    report_config:
+      template: report.config.json
+      output: Report/config.json
+      config: PowerBiReportConfig
+      dataclass: PowerBiReportConfig
+    report_metadata:
+      template: report.metadata.json
+      output: Report/metadata.json
+      config: PowerBiReportMetadata
+      dataclass: PowerBiReportMetadata
+    report_settings:
+      template: report.settings.json
+      output: Report/settings.json
+      config: PowerBiReportSettings
+      dataclass: PowerBiReportSettings
+    diagram_layout:
+      template: diagram.layout.json
+      output: Report/layout.json
+      config: PowerBiDiagramLayout
+      dataclass: PowerBiDiagramLayout
+    report:
+      template: report.json
+      output: Report/report.json
+      config: PowerBiReport
+      dataclass: PowerBiReport
+    report_section:
+      template: report.section.json
+      output: Report/sections/{{name}}.json
+      config: PowerBiReportSection
+      dataclass: PowerBiReportSection
+      multiple: true
+      name_from: name
+
 MicroStrategyMappings:
   ObjectTypes:
     - source: "MicroStrategyReport" # MSTR Grid/Graph Report

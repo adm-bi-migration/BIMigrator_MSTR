@@ -1,9 +1,9 @@
-# Configuration for mapping Microstrategy XML elements to Power BI TMDL/Report objects
+# Configuration for mapping MicroStrategy to Power BI TMDL/Report objects
 
 # --- Output Settings ---
 Output:
   intermediate_dir: extracted  # Directory for storing intermediate JSON files
-  validate_intermediate: false     # Whether to validate intermediate files
+  validate_intermediate: false  # Whether to validate intermediate files
 
 # --- API Settings ---
 api_settings:
@@ -13,9 +13,9 @@ api_settings:
   timeout_seconds: 30
   # Endpoints
   endpoints:
-    tableau_to_dax: "/convert/***-to-dax"
-    tableau_to_m: "/convert/***  -to-m-code"
-    # Add more endpoints as needed
+    mstr_to_dax: "/convert/mstr-to-dax"
+    mstr_to_m: "/convert/mstr-to-m-code"
+    mstr_metric_to_dax: "/convert/mstr-metric-to-dax"
 
 # --- Template Mappings ---
 Templates:
@@ -33,22 +33,26 @@ Templates:
       output: .pbixproj.json
       config: PowerBiProject
       dataclass: PowerBiProject
+
     # --- Model Files ---
     model:
       template: model.tmdl
       output: Model/model.tmdl
       config: PowerBiModel
       dataclass: PowerBiModel
+
     database:
       template: database.tmdl
       output: Model/database.tmdl
       config: PowerBiDatabase
       dataclass: PowerBiDatabase
+
     expressions:
       template: expressions.tmdl
       output: Model/expressions.tmdl
       config: PowerBiExpressions
       dataclass: PowerBiExpressions
+
     table:
       template: Table.tmdl
       output: Model/tables/{{source_name}}.tmdl
@@ -56,6 +60,7 @@ Templates:
       dataclass: PowerBiTable
       multiple: true
       name_from: source_name
+
     relationship:
       template: relationship.tmdl
       output: Model/relationships.tmdl
@@ -63,6 +68,7 @@ Templates:
       dataclass: PowerBiRelationship
       multiple: true
       name_from: id
+
     culture:
       template: culture.tmdl
       output: Model/cultures/{{culture}}.tmdl
@@ -77,26 +83,31 @@ Templates:
       output: Report/config.json
       config: PowerBiReportConfig
       dataclass: PowerBiReportConfig
+
     report_metadata:
       template: report.metadata.json
       output: Report/metadata.json
       config: PowerBiReportMetadata
       dataclass: PowerBiReportMetadata
+
     report_settings:
       template: report.settings.json
       output: Report/settings.json
       config: PowerBiReportSettings
       dataclass: PowerBiReportSettings
+
     diagram_layout:
       template: diagram.layout.json
       output: Report/layout.json
       config: PowerBiDiagramLayout
       dataclass: PowerBiDiagramLayout
+
     report:
       template: report.json
       output: Report/report.json
       config: PowerBiReport
       dataclass: PowerBiReport
+
     report_section:
       template: report.section.json
       output: Report/sections/{{name}}.json
@@ -105,58 +116,448 @@ Templates:
       multiple: true
       name_from: name
 
-MicroStrategyMappings:
+# --- MicroStrategy Mappings ---
+Mappings:
+  # Schema Object Mappings
+  SchemaObjects:
+    AttributeForms:
+      ID: "Key"
+      DESC: "Name"
+      LONGDESC: "Description"
+    DataTypes:
+      Integer: "Int64"
+      Double: "Double"
+      String: "String"
+      Date: "DateTime"
+      Boolean: "Boolean"
+
+  # Object Type Mappings
   ObjectTypes:
-    - source: "MicroStrategyReport" # MSTR Grid/Graph Report
+    Report:
+      source: "MicroStrategyReport"
       target: "PowerBIPage"
-      notes: "Often maps to a single page with a table/matrix or simple visual."
-    - source: "MicroStrategyDocument"
+      notes: "Grid/graph reports map to Power BI pages"
+    Document:
+      source: "MicroStrategyDocument"
       target: ["PowerBIReport", "PowerBIPaginatedReport"]
-      notes: "Complex. Might be split into multiple PBI Report pages or rebuilt as Paginated Report for pixel-perfection."
-    - source: "MicroStrategyDossier"
+      notes: "Complex layouts may need Paginated Reports"
+      conditions:
+        use_paginated:
+          - "has_pixel_perfect_requirements"
+          - "has_multiple_data_regions"
+    Dossier:
+      source: "MicroStrategyDossier"
       target: "PowerBIReport"
-      notes: "Best fit for Power BI interactive reports."
-    - source: "MicroStrategyMetric"
+      notes: "Modern dashboards map to Power BI reports"
+    Metric:
+      source: "MicroStrategyMetric"
       target: "PowerBIMeasure"
-    - source: "MicroStrategyAttribute"
-      target: "PowerBIColumn" # (in a dimension table)
-    - source: "MicroStrategyFact"
-      target: "PowerBIColumn" # (in a fact table, to be aggregated by measures)
-    - source: "MicroStrategyPrompt"
-      target: "PowerBISlicer" # or PowerBIParameter
-    - source: "MicroStrategyIntelligentCube"
+      notes: "Requires DAX conversion"
+    Attribute:
+      source: "MicroStrategyAttribute"
+      target: "PowerBIColumn"
+      table_type: "dimension"
+    Fact:
+      source: "MicroStrategyFact"
+      target: "PowerBIColumn"
+      table_type: "fact"
+    Prompt:
+      source: "MicroStrategyPrompt"
+      target:
+        element: "PowerBISlicer"
+        value: "PowerBIParameter"
+        object: "PowerBIParameter"
+    Cube:
+      source: "MicroStrategyIntelligentCube"
       target: "PowerBIDataset_ImportMode"
 
-  VisualTypes: # From MSTR Reports/Documents/Dossiers
+  # Visual Mappings
+  Visuals:
+    Grid:
+      target: ["MatrixVisual", "TableVisual"]
+      rules:
+        - condition: "has_row_attributes && has_column_attributes"
+          target: "MatrixVisual"
+        - condition: "default"
+          target: "TableVisual"
+    Charts:
+      VerticalBar:
+        Clustered:
+          target: "ClusteredBarChart"
+        Stacked:
+          target: "StackedBarChart"
+        Percent:
+          target: "100StackedBarChart"
+      HorizontalBar:
+        Clustered:
+          target: "ClusteredBarChart"
+          properties:
+            orientation: "horizontal"
+      Line:
+        target: "LineChart"
+      Area:
+        target: "AreaChart"
+      Pie:
+        target: "PieChart"
+      Scatter:
+        target: "ScatterChart"
+      Bubble:
+        target: "BubbleChart"
+      Combo:
+        target: "ComboChart"
+    Widgets:
+      Selector:
+        target: "Slicer"
+      TextBox:
+        target: "TextBox"
+      Image:
+        target: "Image"
+      Shape:
+        target: "Shape"
+
+  # Function Mappings
+  Functions:
+    Aggregation:
+      Sum:
+        target: "SUM"
+        confidence: "High"
+      Avg:
+        target: "AVERAGE"
+        confidence: "High"
+      Count:
+        target: "COUNT"
+        confidence: "High"
+      CountDistinct:
+        target: "DISTINCTCOUNT"
+        confidence: "High"
+      Max:
+        target: "MAX"
+        confidence: "High"
+      Min:
+        target: "MIN"
+        confidence: "High"
+    TimeIntelligence:
+      YearToDate:
+        target: "TOTALYTD"
+        confidence: "Medium"
+        requires: ["measure", "date_column"]
+      MonthToDate:
+        target: "TOTALMTD"
+        confidence: "Medium"
+        requires: ["measure", "date_column"]
+      QuarterToDate:
+        target: "TOTALQTD"
+        confidence: "Medium"
+        requires: ["measure", "date_column"]
+    LevelMetrics:
+      ReportLevel:
+        pattern: "Sum({~+})"
+        target: "CALCULATE(SUM(), ALLSELECTED())"
+        confidence: "Medium"
+      AttributeLevel:
+        pattern: "Sum({attribute+})"
+        target: "CALCULATE(SUM(), ALLEXCEPT(table, attribute))"
+        confidence: "Medium"
+    Complex:
+      RunningSum:
+        target: "CALCULATE(SUM(), FILTER(ALLSELECTED(), column <= MAX(column)))"
+        confidence: "Medium"
+        requires: ["measure", "order_by_column"]
+      RankDecreasing:
+        target: "RANKX(ALL(table), measure, , DESC)"
+        confidence: "Medium"
+        requires: ["measure", "table"]
+      ApplySimple:
+        target: "MANUAL_REVIEW"
+        confidence: "Low"
+        notes: "Contains raw SQL, needs manual review"
+      ApplyAgg:
+        target: "MANUAL_REVIEW"
+        confidence: "Low"
+        notes: "Complex aggregation, needs manual review"
+
+  # Prompt Type Mappings
+  Prompts:
+    Element:
+      target: "Slicer"
+      properties:
+        type: "Dropdown"
+        multi_select: true
+    Value:
+      target: "Parameter"
+      properties:
+        allow_multiple: false
+    Object:
+      target: "Parameter"
+      properties:
+        data_type: "Text"
+
+  # API Response Field Mappings
+  ResponseFields:
+    Metric:
+      name: "name"
+      expression: "expression.text"
+      description: "description"
+      folder: "ancestors[*].name"
+    Attribute:
+      name: "name"
+      forms: "forms[*]"
+      lookup_table: "lookupTable.name"
+    Report:
+      name: "name"
+      grid: "grid"
+      filters: "filters[*]"
+      prompts: "prompts[*]"
+
+
+
+  # Object Type Mappings
+  ObjectTypes:
+    - source: "MicroStrategyReport"
+      target: "PowerBIPage"
+      notes: "Grid/graph reports typically map to a single Power BI page"
+      conversion_priority: 1
+
+    - source: "MicroStrategyDocument"
+      target: ["PowerBIReport", "PowerBIPaginatedReport"]
+      notes: "Complex layouts may need Paginated Reports"
+      conversion_priority: 3
+      paginated_report_conditions:
+        - "has_pixel_perfect_requirements"
+        - "has_multiple_data_regions"
+        - "has_complex_formatting"
+
+    - source: "MicroStrategyDossier"
+      target: "PowerBIReport"
+      notes: "Modern dashboards map well to Power BI reports"
+      conversion_priority: 1
+
+    - source: "MicroStrategyMetric"
+      target: "PowerBIMeasure"
+      notes: "Requires DAX conversion"
+      conversion_priority: 2
+
+    - source: "MicroStrategyAttribute"
+      target: "PowerBIColumn"
+      notes: "Maps to dimension columns"
+      conversion_priority: 1
+      table_placement: "dimension"
+
+    - source: "MicroStrategyFact"
+      target: "PowerBIColumn"
+      notes: "Maps to fact table columns"
+      conversion_priority: 1
+      table_placement: "fact"
+
+    - source: "MicroStrategyPrompt"
+      target: ["PowerBISlicer", "PowerBIParameter"]
+      notes: "Element prompts -> Slicers, Value prompts -> Parameters"
+      conversion_priority: 2
+      mapping_rules:
+        element_prompt: "PowerBISlicer"
+        value_prompt: "PowerBIParameter"
+        object_prompt: "PowerBIParameter"
+
+    - source: "MicroStrategyIntelligentCube"
+      target: "PowerBIDataset_ImportMode"
+      notes: "Maps to imported tables in Power BI"
+      conversion_priority: 1
+
+  # Visual Type Mappings
+  VisualTypes:
+    # Grid Types
     - source: "Grid"
       target: ["MatrixVisual", "TableVisual"]
+      rules:
+        - condition: "has_row_attributes && has_column_attributes"
+          target: "MatrixVisual"
+        - condition: "default"
+          target: "TableVisual"
+
+    # Graph Types
     - source: "Graph:VerticalBar:Clustered"
       target: "ClusteredBarChart"
-    # ... many more visual mappings ...
+    - source: "Graph:VerticalBar:Stacked"
+      target: "StackedBarChart"
+    - source: "Graph:VerticalBar:Percent"
+      target: "100StackedBarChart"
+    - source: "Graph:HorizontalBar:Clustered"
+      target: "ClusteredBarChart"
+      properties:
+        orientation: "horizontal"
+    - source: "Graph:Line"
+      target: "LineChart"
+    - source: "Graph:Area"
+      target: "AreaChart"
+    - source: "Graph:Pie"
+      target: "PieChart"
+    - source: "Graph:Scatter"
+      target: "ScatterChart"
+    - source: "Graph:Bubble"
+      target: "BubbleChart"
+    - source: "Graph:Combo"
+      target: "ComboChart"
 
-  FunctionMappings: # For your Formula Conversion Service (can be in a separate file too)
-    - source_function_name: "Sum" # MSTR Sum
-      target_function_name: "SUM"  # DAX SUM
-      # Potentially add context for level metrics, conditions, transformations
-    - source_function_name: "Avg"
-      target_function_name: "AVERAGE"
-    - source_function_name: "ApplySimple"
-      target_function_name: "N/A - Manual Review Required"
+    # Widget Types (Documents/Dossiers)
+    - source: "Widget:Selector"
+      target: "Slicer"
+    - source: "Widget:TextBox"
+      target: "TextBox"
+    - source: "Widget:Image"
+      target: "Image"
+    - source: "Widget:Shape"
+      target: "Shape"
+
+  # Function Mappings for Formula Conversion
+  FunctionMappings:
+    # Aggregation Functions
+    - source_function: "Sum"
+      target_function: "SUM"
+      confidence: "High"
+      context_required: ["column_name"]
+
+    - source_function: "Avg"
+      target_function: "AVERAGE"
+      confidence: "High"
+      context_required: ["column_name"]
+
+    - source_function: "Count"
+      target_function: "COUNT"
+      confidence: "High"
+      context_required: ["column_name"]
+
+    - source_function: "CountDistinct"
+      target_function: "DISTINCTCOUNT"
+      confidence: "High"
+      context_required: ["column_name"]
+
+    - source_function: "Max"
+      target_function: "MAX"
+      confidence: "High"
+      context_required: ["column_name"]
+
+    - source_function: "Min"
+      target_function: "MIN"
+      confidence: "High"
+      context_required: ["column_name"]
+
+    # Time Intelligence Functions
+    - source_function: "YearToDate"
+      target_function: "TOTALYTD"
+      confidence: "Medium"
+      context_required: ["measure", "date_column"]
+
+    - source_function: "MonthToDate"
+      target_function: "TOTALMTD"
+      confidence: "Medium"
+      context_required: ["measure", "date_column"]
+
+    - source_function: "QuarterToDate"
+      target_function: "TOTALQTD"
+      confidence: "Medium"
+      context_required: ["measure", "date_column"]
+
+    # Level Metrics
+    - source_function: "LevelMetric"
+      pattern: "Sum({~+})"
+      target_function: "CALCULATE(SUM(), ALLSELECTED())"
+      confidence: "Medium"
+      notes: "Report level total"
+
+    - source_function: "LevelMetric"
+      pattern: "Sum({attribute+})"
+      target_function: "CALCULATE(SUM(), ALLEXCEPT(table, attribute))"
+      confidence: "Medium"
+      notes: "Attribute level total"
+
+    # Complex Functions
+    - source_function: "RunningSum"
+      target_function: "CALCULATE(SUM(), FILTER(ALLSELECTED(), column <= MAX(column)))"
+      confidence: "Medium"
+      context_required: ["measure", "order_by_column"]
+
+    - source_function: "RankDecreasing"
+      target_function: "RANKX(ALL(table), measure, , DESC)"
+      confidence: "Medium"
+      context_required: ["measure", "table"]
+
+    - source_function: "ApplySimple"
+      target_function: "MANUAL_REVIEW"
       confidence: "Low"
-      notes: "Embeds SQL. Requires complex parsing or manual rewrite in DAX or Power Query."
-    # ... other MSTR functions like RunningSum, OLAPSum, Rank, etc.
+      notes: "Contains raw SQL, needs manual conversion"
+      requires_review: true
 
-  # Field mappings will be more about extracting structured info from MSTR object definitions
-  # Example for extracting a metric definition using REST API JSON response
-  MetricDefinition:
-    source_api_path: "/metrics/{metricId}/definition" # Example endpoint
-    field_mappings:
-      name:
-        source_json_path: "name"
-      expression:
-        source_json_path: "expression.text" # Or "expression.tree" if structured
-      description:
-        source_json_path: "description"
-        default: ""
-      folder_path:
-        source_json_path: "ancestors[*].name" # Join to form path
+    - source_function: "ApplyAgg"
+      target_function: "MANUAL_REVIEW"
+      confidence: "Low"
+      notes: "Complex aggregation, needs manual review"
+      requires_review: true
+
+  # Schema Object Mappings
+  SchemaObjects:
+    AttributeForms:
+      ID: "Key"
+      DESC: "Name"
+      LONGDESC: "Description"
+
+    DataTypes:
+      Integer: "Int64"
+      Double: "Double"
+      String: "String"
+      Date: "DateTime"
+      Boolean: "Boolean"
+
+  # Prompt Mappings
+  PromptMappings:
+    ElementPrompt:
+      target: "Slicer"
+      properties:
+        type: "Dropdown"
+        multi_select: true
+
+    ValuePrompt:
+      target: "Parameter"
+      properties:
+        allow_multiple: false
+
+    ObjectPrompt:
+      target: "Parameter"
+      properties:
+        data_type: "Text"
+
+  # API Response Mappings
+  ResponseMappings:
+    MetricDefinition:
+      source_api_path: "/metrics/{metricId}/definition"
+      field_mappings:
+        name:
+          source_json_path: "name"
+        expression:
+          source_json_path: "expression.text"
+        description:
+          source_json_path: "description"
+          default: ""
+        folder_path:
+          source_json_path: "ancestors[*].name"
+
+    AttributeDefinition:
+      source_api_path: "/attributes/{attributeId}/definition"
+      field_mappings:
+        name:
+          source_json_path: "name"
+        forms:
+          source_json_path: "forms[*]"
+        lookup_table:
+          source_json_path: "lookupTable.name"
+
+    ReportDefinition:
+      source_api_path: "/reports/{reportId}/definition"
+      field_mappings:
+        name:
+          source_json_path: "name"
+        grid_data:
+          source_json_path: "grid"
+        filters:
+          source_json_path: "filters[*]"
+        prompts:
+          source_json_path: "prompts[*]"

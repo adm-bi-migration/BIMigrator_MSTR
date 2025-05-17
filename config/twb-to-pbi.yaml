@@ -1,0 +1,236 @@
+# Configuration for mapping Tableau TWB XML elements to Power BI TMDL/Report objects
+
+# --- Output Settings ---
+Output:
+  intermediate_dir: extracted  # Directory for storing intermediate JSON files
+  validate_intermediate: false     # Whether to validate intermediate files
+
+# --- API Settings ---
+api_settings:
+  # Base URL for the FastAPI service
+  base_url: "http://localhost:8000"
+  # Timeout in seconds for API requests
+  timeout_seconds: 30
+  # Endpoints
+  endpoints:
+    tableau_to_dax: "/convert/tableau-to-dax"
+    tableau_to_m: "/convert/tableau-to-m-code"
+    # Add more endpoints as needed
+
+# --- Template Mappings ---
+Templates:
+  base_dir: templates
+  mappings:
+    # --- Project Files ---
+    version:
+      template: Version.txt
+      output: Version.txt
+      config: PowerBiVersion
+      dataclass: PowerBiVersion
+
+    pbixproj:
+      template: pbixproj.json
+      output: .pbixproj.json
+      config: PowerBiProject
+      dataclass: PowerBiProject
+    # --- Model Files ---
+    model:
+      template: model.tmdl
+      output: Model/model.tmdl
+      config: PowerBiModel
+      dataclass: PowerBiModel
+    database:
+      template: database.tmdl
+      output: Model/database.tmdl
+      config: PowerBiDatabase
+      dataclass: PowerBiDatabase
+    expressions:
+      template: expressions.tmdl
+      output: Model/expressions.tmdl
+      config: PowerBiExpressions
+      dataclass: PowerBiExpressions
+    table:
+      template: Table.tmdl
+      output: Model/tables/{{source_name}}.tmdl
+      config: PowerBiTable
+      dataclass: PowerBiTable
+      multiple: true
+      name_from: source_name
+    relationship:
+      template: relationship.tmdl
+      output: Model/relationships.tmdl
+      config: PowerBiRelationship
+      dataclass: PowerBiRelationship
+      multiple: true
+      name_from: id
+    culture:
+      template: culture.tmdl
+      output: Model/cultures/{{culture}}.tmdl
+      config: PowerBiCulture
+      dataclass: CultureInfo
+      multiple: true
+      name_from: culture
+
+    # --- Report Files ---
+    report_config:
+      template: report.config.json
+      output: Report/config.json
+      config: PowerBiReportConfig
+      dataclass: PowerBiReportConfig
+    report_metadata:
+      template: report.metadata.json
+      output: Report/metadata.json
+      config: PowerBiReportMetadata
+      dataclass: PowerBiReportMetadata
+    report_settings:
+      template: report.settings.json
+      output: Report/settings.json
+      config: PowerBiReportSettings
+      dataclass: PowerBiReportSettings
+    diagram_layout:
+      template: diagram.layout.json
+      output: Report/layout.json
+      config: PowerBiDiagramLayout
+      dataclass: PowerBiDiagramLayout
+    report:
+      template: report.json
+      output: Report/report.json
+      config: PowerBiReport
+      dataclass: PowerBiReport
+    report_section:
+      template: report.section.json
+      output: Report/sections/{{name}}.json
+      config: PowerBiReportSection
+      dataclass: PowerBiReportSection
+      multiple: true
+      name_from: name
+
+# --- Model Settings ---
+PowerBiModel:
+  source_xpath: //workbook
+  model_name:
+    source_xpath: ./@name
+    default: Model
+  culture:
+    source_xpath: .//preferences/preference[@name="locale"]/@value
+    default: en-US
+  data_access:
+    legacy_redirects: true  # Static value
+    return_null_errors: true  # Static value
+  query_order:
+    source_xpath: //relation[@type="table"]/@name
+    format: json_list  # Will be formatted as ["table1", "table2", ...]
+  time_intelligence:
+    source_xpath: //column[@role="dimension"][@datatype="date"]
+    format: boolean  # 1 if exists, 0 if not
+  annotations:
+    source_xpath: .//annotations
+    format: json  # Will be parsed as JSON
+
+# --- Table Settings ---
+PowerBiTable:
+  # Target datasource elements that have actual connections
+  source_xpath: |
+    //datasources/datasource[
+      @inline='true' and
+      not(@name='Parameters') and
+      not(@hasconnection='false') and
+      .//connection[@class and @class!='tableau']
+    ]
+  source_name:
+    # 'caption' is often the user-friendly name
+    source_attribute: caption
+    fallback_attribute: name # Fallback to internal name if caption is missing
+  description:
+    source_attribute: caption
+    default: null
+  is_hidden:
+    source_attribute: hidden
+    default: false
+
+  # Connection configuration
+  connection_config:
+    # Primary connection types
+    primary_xpath: "connection[@class!='tableau']"
+    named_connection_xpath: "connection/named-connections/named-connection/connection"
+    # Connection class mapping
+    class_mapping:
+      federated: "named-connection"
+      dremio: "dremio"
+      oracle: "oracle"
+      sqlserver: "sqlserver"
+      excel: "excel-direct"
+
+  # Relation configuration to find actual tables within datasources
+  relation_config:
+    # Find relations within connections in datasources, handling both legacy and new formats
+    source_xpath: |
+      connection/relation[@type='table' or @type='text'] |
+      connection/_.fcp.ObjectModelEncapsulateLegacy.false...relation[@type='table' or @type='text' or @type='join'] |
+      relation[@type='table' or @type='text']
+    table_name:
+      source_attribute: name
+      optional: true
+    table_type:
+      source_attribute: type
+      optional: true
+    connection_id:
+      source_xpath: "../@name"
+      optional: true
+    sql_query:
+      # For text type relations that contain SQL queries
+      source_xpath: "text()"
+      optional: true
+    # Handle join relations
+    join_config:
+      source_xpath: "clause[@type='join']/expression[@op='=']"
+      left_table_xpath: "expression[1]/text()"
+      right_table_xpath: "expression[2]/text()"
+
+  # Columns configuration
+  columns_config:
+    # Target metadata-records for logical columns
+    source_xpath: ".//metadata-records/metadata-record[@class='column']"
+    # Target standalone calculated fields directly under datasource
+    calculated_fields_xpath: "column[calculation]"
+    # Additional XPaths for finding columns in relation elements
+    relation_column_paths:
+      - ".//_.fcp.ObjectModelEncapsulateLegacy.false...relation//column"
+      - ".//_.fcp.ObjectModelEncapsulateLegacy.true...relation//column"
+      - ".//relation//column"
+    # Attribute mappings for relation columns
+    relation_column_mappings:
+      name_attribute: "name"
+      datatype_attribute: "datatype"
+      ordinal_attribute: "ordinal"
+    # Attribute mappings for calculated fields
+    calculated_field_mappings:
+      name_attribute: "caption"
+      datatype_attribute: "datatype"
+      description_attribute: "caption"
+    name:
+      source_attribute: caption
+      fallback_attribute: local-name
+      format: identifier
+    datatype:
+      source_attribute: local-type
+      mapping: tableau_datatype_to_tmdl
+    format_string:
+      source_attribute: format
+      optional: true
+    summarize_by:
+      source_xpath: "aggregation/text()"
+      optional: true
+    description:
+      source_attribute: caption
+      optional: true
+    is_hidden:
+      source_attribute: hidden
+      format: boolean
+      default: false
+    role:
+      source_attribute: role
+      optional: true
+    calculation_formula:
+      source_xpath: "calculation/@formula"
+      optional: true

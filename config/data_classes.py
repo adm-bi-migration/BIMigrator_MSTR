@@ -477,6 +477,141 @@ class PowerBiTargetStructure:
 # --- Temporary class for processing source info (No change needed) ---
 @dataclass
 class PowerBiDataSourceInfo:
+    source_name: str
     pbi_type: str
     connection_details: Dict
+
+
+# --- MicroStrategy-specific Objects ---
+
+@dataclass
+class MicroStrategyAttributeForm:
+    """Represents a form in a MicroStrategy attribute."""
+    name: str
+    dataType: str
+    expression: Optional[str] = None
+
+@dataclass
+class MicroStrategyAttribute:
+    """Represents a MicroStrategy attribute (dimension)."""
+    id: str
+    name: str
+    forms: List[MicroStrategyAttributeForm] = field(default_factory=list)
+    lookupTable: Optional[str] = None
+    relationships: List[Dict[str, Any]] = field(default_factory=list)
+
+@dataclass
+class MicroStrategyFact:
+    """Represents a MicroStrategy fact (measure)."""
+    id: str
+    name: str
+    expression: str
+    sourceTable: str
+    dataType: str
+
+@dataclass
+class MicroStrategyMetric:
+    """Represents a MicroStrategy metric (calculated measure)."""
+    id: str
+    name: str
+    expression: str
+    conditionality: Optional[str] = None
+    level: Optional[Dict[str, Any]] = None
+    transformation: Optional[str] = None
+    formatting: Optional[Dict[str, Any]] = None
+
+@dataclass
+class MicroStrategyPrompt:
+    """Represents a MicroStrategy prompt (parameter)."""
+    id: str
+    name: str
+    type: str  # element, value, object
+    defaultAnswer: Optional[Any] = None
+    required: bool = False
+    title: Optional[str] = None
+    instructions: Optional[str] = None
+
+@dataclass
+class MicroStrategyVisual:
+    """Represents a visual in a MicroStrategy report/document/dossier."""
+    type: str
+    attributes: List[str] = field(default_factory=list)
+    metrics: List[str] = field(default_factory=list)
+    properties: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class MicroStrategyFilter:
+    """Represents a MicroStrategy filter."""
+    id: str
+    name: str
+    type: str  # attribute, metric, shortcut
+    expression: str
+    qualification: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class MicroStrategyReportBase:
+    """Base class for MicroStrategy reports, documents, and dossiers."""
+    id: str
+    name: str
+    path: str
+    description: Optional[str] = None
+    prompts: List[MicroStrategyPrompt] = field(default_factory=list)
+    filters: List[MicroStrategyFilter] = field(default_factory=list)
+    visuals: List[MicroStrategyVisual] = field(default_factory=list)
+
+@dataclass
+class MicroStrategyReport(MicroStrategyReportBase):
+    """Represents a MicroStrategy grid/graph report."""
+    pass
+
+@dataclass
+class MicroStrategyDocumentSection:
+    """Represents a section in a MicroStrategy document."""
+    name: str
+    layout: Dict[str, Any] = field(default_factory=dict)
+    controls: List[Dict[str, Any]] = field(default_factory=list)
+
+@dataclass
+class MicroStrategyDocument(MicroStrategyReportBase):
+    """Represents a MicroStrategy Report Services document."""
+    sections: List[MicroStrategyDocumentSection] = field(default_factory=list)
+    layout: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class MicroStrategyDossierPage:
+    """Represents a page in a MicroStrategy dossier."""
+    name: str
+    visuals: List[MicroStrategyVisual] = field(default_factory=list)
+    layout: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class MicroStrategyDossier(MicroStrategyReportBase):
+    """Represents a MicroStrategy dossier."""
+    pages: List[MicroStrategyDossierPage] = field(default_factory=list)
+
+@dataclass
+class MicroStrategyCube:
+    """Represents a MicroStrategy Intelligent Cube."""
+    id: str
+    name: str
+    attributes: List[str] = field(default_factory=list)
+    metrics: List[str] = field(default_factory=list)
+    filters: List[MicroStrategyFilter] = field(default_factory=list)
+    source_type: str
+    properties: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class MicroStrategyProject:
+    """Represents a MicroStrategy project."""
+    name: str
+    datasources: List[Dict[str, Any]] = field(default_factory=list)
+    attributes: List[MicroStrategyAttribute] = field(default_factory=list)
+    facts: List[MicroStrategyFact] = field(default_factory=list)
+    metrics: List[MicroStrategyMetric] = field(default_factory=list)
+    filters: List[MicroStrategyFilter] = field(default_factory=list)
+    prompts: List[MicroStrategyPrompt] = field(default_factory=list)
+    reports: List[MicroStrategyReport] = field(default_factory=list)
+    documents: List[MicroStrategyDocument] = field(default_factory=list)
+    dossiers: List[MicroStrategyDossier] = field(default_factory=list)
+    cubes: List[MicroStrategyCube] = field(default_factory=list)
     source_name: str
